@@ -23,154 +23,179 @@
 #include <netinet/if_ether.h>
 #include <sys/sysctl.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <ruby.h>
 
-static int
-setifflags(int fd, char *ifname, int value)
+static int 
+socket_open(void)
 {
-	struct ifreq		my_ifr;
+	int fd;
+	if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+		rb_raise(rb_eException, "%s", strerror(errno));
+	return fd;
+}
+
+static void
+setifflags(char *ifname, int value)
+{
+	struct ifreq ifr;
 	int flags;
+	int fd = socket_open();
 
-	memset(&my_ifr, 0, sizeof(my_ifr));
-	(void) strlcpy(my_ifr.ifr_name, ifname, sizeof(my_ifr.ifr_name));
+	memset(&ifr, 0, sizeof(ifr));
+	(void) strlcpy(ifr.ifr_name, ifname, sizeof(ifr.ifr_name));
 
- 	if (ioctl(fd, SIOCGIFFLAGS, (caddr_t)&my_ifr) < 0)
-		return (-1);
-	flags = (my_ifr.ifr_flags & 0xffff) | (my_ifr.ifr_flagshigh << 16);
+ 	if (ioctl(fd, SIOCGIFFLAGS, (caddr_t)&ifr) < 0) {
+		close(fd);
+		rb_raise(rb_eException, "%s", strerror(errno));
+	}
+	flags = (ifr.ifr_flags & 0xffff) | (ifr.ifr_flagshigh << 16);
 
 	if (value < 0) {
 		value = -value;
 		flags &= ~value;
 	} else
 		flags |= value;
-	my_ifr.ifr_flags = flags & 0xffff;
-	my_ifr.ifr_flagshigh = flags >> 16;
-	if (ioctl(fd, SIOCSIFFLAGS, (caddr_t)&my_ifr) < 0)
-		return (-1);
-	return (0);
+	ifr.ifr_flags = flags & 0xffff;
+	ifr.ifr_flagshigh = flags >> 16;
+	if (ioctl(fd, SIOCSIFFLAGS, (caddr_t)&ifr) < 0) {
+		close(fd);
+		rb_raise(rb_eException, "%s", strerror(errno));
+	}
+	close(fd);
 }
 
 static int
-getifflags(int fd, char *ifname, int *flags)
-{
-	struct ifreq		my_ifr;
-
-	memset(&my_ifr, 0, sizeof(my_ifr));
-	(void) strlcpy(my_ifr.ifr_name, ifname, sizeof(my_ifr.ifr_name));
-
- 	if (ioctl(fd, SIOCGIFFLAGS, (caddr_t)&my_ifr) < 0)
-		return (-1);
-	*flags = (my_ifr.ifr_flags & 0xffff) | (my_ifr.ifr_flagshigh << 16);
-	return (0);
-}
-
-int setifpromisc(int fd, char *ifname, int enable)
-{
-	return setifflags(fd, ifname, 
-		enable ? IFF_PPROMISC : -IFF_PPROMISC);
-}
-
-int getifpromisc(int fd, char *ifname, int *enable)
-{
-	int flags, ret;
-
-	if ((ret = getifflags(fd, ifname, &flags)))
-		return (ret);
-	*enable = (flags & IFF_PPROMISC) ? 1 : 0;
-	return (0);
-}
-
-int setifup(int fd, char *ifname, int enable)
-{
-	return setifflags(fd, ifname, 
-		enable ? IFF_UP: -IFF_UP);
-}
-
-int getifup(int fd, char *ifname, int *enable)
-{
-	int flags, ret;
-
-	if ((ret = getifflags(fd, ifname, &flags)))
-		return (ret);
-	*enable = (flags & IFF_UP) ? 1 : 0;
-	return (0);
-}
-
-int
-setifmtu(int fd, char *ifname, int mtu)
+getifflags(char *ifname)
 {
 	struct ifreq ifr;
+	int fd = socket_open();
+
+	memset(&ifr, 0, sizeof(ifr));
+	(void) strncpy(ifr.ifr_name, ifname, sizeof(ifr.ifr_name));
+
+ 	if (ioctl(fd, SIOCGIFFLAGS, (caddr_t)&ifr) < 0) {
+		close(fd);
+		rb_raise(rb_eException, "%s", strerror(errno));
+	}
+	close(fd);
+	return (ifr.ifr_flags & 0xffff) | (ifr.ifr_flagshigh << 16);
+}
+
+void setifpromisc(char *ifname, int enable)
+{
+	setifflags(ifname, enable ? IFF_PPROMISC : -IFF_PPROMISC);
+}
+
+int getifpromisc(char *ifname)
+{
+	int flags = getifflags(ifname);
+	return ((flags & IFF_PPROMISC) ? 1 : 0);
+}
+
+void setifup(char *ifname, int enable)
+{
+	setifflags(ifname, enable ? IFF_UP : -IFF_UP);
+}
+
+int getifup(char *ifname)
+{
+	int flags = getifflags(ifname);
+	return ((flags & IFF_UP) ? 1 : 0);
+}
+
+void 
+setifmtu(char *ifname, int mtu)
+{
+	struct ifreq ifr;
+	int fd = socket_open();
 
 	strncpy(ifr.ifr_name, ifname, sizeof (ifr.ifr_name));
 	ifr.ifr_mtu = mtu;
-	if (ioctl(fd, SIOCSIFMTU, (caddr_t)&ifr) < 0)
-		return (-1);
-	return (0);
+	if (ioctl(fd, SIOCSIFMTU, (caddr_t)&ifr) < 0) {
+		close(fd);
+		rb_raise(rb_eException, "%s", strerror(errno));
+	}
+	close(fd);
 }
 
 int
-getifmtu(int fd, char *ifname, int *mtu)
+getifmtu(char *ifname)
 {
 	struct ifreq ifr;
+	int fd = socket_open();
 
 	strncpy(ifr.ifr_name, ifname, sizeof (ifr.ifr_name));
-	if (ioctl(fd, SIOCGIFMTU, (caddr_t)&ifr) < 0)
-		return (-1);
-	*mtu = ifr.ifr_mtu;
-	return (0);
+	if (ioctl(fd, SIOCGIFMTU, (caddr_t)&ifr) < 0) {
+		close(fd);
+		rb_raise(rb_eException, "%s", strerror(errno));
+	}
+	close(fd);
+	return (ifr.ifr_mtu);
 }
 
-int
-getifnetmask(int fd, char *ifname, char *mask, size_t size)
+void 
+getifnetmask(char *ifname, char *mask, size_t size)
 {
 	struct ifreq ifr;
 	struct sockaddr_in *sin;
+	int fd = socket_open();
 
 	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
 	ifr.ifr_addr.sa_family = AF_INET;
-	if (ioctl(fd, SIOCGIFNETMASK, &ifr) < 0)
-		return (-1);
+	if (ioctl(fd, SIOCGIFNETMASK, &ifr) < 0) {
+		close(fd);
+		rb_raise(rb_eException, "%s", strerror(errno));
+	}
 	sin = (struct sockaddr_in *)&ifr.ifr_addr;
 	strncpy(mask, inet_ntoa(sin->sin_addr), size);
-	return (0);
+	close(fd);
 }
 
-int 
-getifaddr(int fd, char *ifname, char *addr, size_t size)
+void 
+getifaddr(char *ifname, char *mask, size_t size)
 {
 	struct ifreq ifr;
 	struct sockaddr_in *sin;
+	int fd = socket_open();
 
 	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
 	ifr.ifr_addr.sa_family = AF_INET;
-	if (ioctl(fd, SIOCGIFADDR, &ifr) < 0)
-		return (-1);
+	if (ioctl(fd, SIOCGIFADDR, &ifr) < 0) {
+		close(fd);
+		rb_raise(rb_eException, "%s", strerror(errno));
+	}
 	sin = (struct sockaddr_in *)&ifr.ifr_addr;
-	strncpy(addr, inet_ntoa(sin->sin_addr), size);
-	return (0);
+	strncpy(mask, inet_ntoa(sin->sin_addr), size);
+	close(fd);
 }
 
-int 
-getifbroadaddr(int fd, char *ifname, char *addr, size_t size)
+void
+getifbroadaddr(char *ifname, char *mask, size_t size)
 {
 	struct ifreq ifr;
 	struct sockaddr_in *sin;
+	int fd = socket_open();
 
 	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
 	ifr.ifr_addr.sa_family = AF_INET;
-	if (ioctl(fd, SIOCGIFBRDADDR, &ifr) < 0)
-		return (-1);
+	if (ioctl(fd, SIOCGIFBRDADDR, &ifr) < 0) {
+		close(fd);
+		rb_raise(rb_eException, "%s", strerror(errno));
+	}
 	sin = (struct sockaddr_in *)&ifr.ifr_addr;
-	strncpy(addr, inet_ntoa(sin->sin_addr), size);
-	return (0);
+	strncpy(mask, inet_ntoa(sin->sin_addr), size);
+	close(fd);
 }
 
-int
-setifaddr(int fd, char *ifname, char *addr, char *mask)
+void
+setifaddr(char *ifname, char *addr, char *mask)
 {
 	struct ifreq ifr;
 	static struct in_aliasreq in_addreq;
 	struct sockaddr_in *saddr = &in_addreq.ifra_addr;
 	struct sockaddr_in *smask = &in_addreq.ifra_mask;
+	int fd = socket_open();
 
 	memset(&in_addreq, 0, sizeof(in_addreq));
 	strncpy(in_addreq.ifra_name, ifname, IFNAMSIZ);
@@ -182,26 +207,40 @@ setifaddr(int fd, char *ifname, char *addr, char *mask)
 	if (ioctl(fd, SIOCGIFADDR, &ifr) == 0) {
 		memcpy(&in_addreq.ifra_addr, &ifr.ifr_addr, 
 			sizeof(ifr.ifr_addr));
-		if (ioctl(fd, SIOCDIFADDR, &in_addreq) < 0)
-			return (-1);
+		if (ioctl(fd, SIOCDIFADDR, &in_addreq) < 0) {
+			close(fd);
+			rb_raise(rb_eException, "%s", strerror(errno));
+		}
 	}
-	if (!inet_aton(addr, &saddr->sin_addr))
-		return (-1);
-	if (!inet_aton(mask, &smask->sin_addr))
-		return (-1);
 
-	if (ioctl(fd, SIOCAIFADDR, &in_addreq) < 0)
-		return (-1);
-	return (0);
+	if (!inet_aton(addr, &saddr->sin_addr)) {
+		close(fd);
+		rb_raise(rb_eException, "%s", strerror(errno));
+	}
+
+	if (!inet_aton(mask, &smask->sin_addr)) {
+		close(fd);
+		rb_raise(rb_eException, "%s", strerror(errno));
+	}
+
+	if (ioctl(fd, SIOCAIFADDR, &in_addreq) < 0) {
+		close(fd);
+		rb_raise(rb_eException, "%s", strerror(errno));
+	}
+	close(fd);
 }
 
-int ifexist(int fd, char *ifname)
+int ifexist(char *ifname)
 {
 	struct ifreq ifr;
+	int fd = socket_open();
+	int ret;
 
 	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
 	ifr.ifr_addr.sa_family = AF_INET;
-	return (ioctl(fd, SIOCGIFADDR, &ifr) == 0);
+	ret = ioctl(fd, SIOCGIFADDR, &ifr);
+	close(fd);
+	return (ret == 0 ? 1 : 0);
 }
 
 /*
@@ -221,8 +260,7 @@ arp_getaddr(char *host)
 	reply.sin_addr.s_addr = inet_addr(host);
 	if (reply.sin_addr.s_addr == INADDR_NONE) {
 		if (!(hp = gethostbyname(host))) {
-			warnx("%s: %s", host, hstrerror(h_errno));
-			return (NULL);
+			rb_raise(rb_eException, "%s: %s", host, hstrerror(h_errno));
 		}
 		bcopy((char *)hp->h_addr, (char *)&reply.sin_addr,
 			sizeof reply.sin_addr);
@@ -273,7 +311,7 @@ arp_rtmsg(int cmd, struct sockaddr_in *dst, struct sockaddr_dl *sdl,
 	if (s < 0) {	/* first time: open socket, get pid */
 		s = socket(PF_ROUTE, SOCK_RAW, 0);
 		if (s < 0)
-			err(1, "socket");
+			rb_raise(rb_eException, "%s", strerror(errno));
 		pid = getpid();
 	}
 	bzero(&so_mask, sizeof(so_mask));
@@ -293,7 +331,7 @@ arp_rtmsg(int cmd, struct sockaddr_in *dst, struct sockaddr_dl *sdl,
 
 	switch (cmd) {
 	default:
-		errx(1, "internal wrong cmd");
+		rb_raise(rb_eException, "internal wrong cmd");
 	case RTM_ADD:
 		rtm->rtm_addrs |= RTA_GATEWAY;
 		rtm->rtm_rmx.rmx_expire = 0;
@@ -322,19 +360,19 @@ doit:
 	rtm->rtm_type = cmd;
 	if ((rlen = write(s, (char *)&m_rtmsg, l)) < 0) {
 		if (errno != ESRCH || cmd != RTM_DELETE) {
-			warn("writing to routing socket");
-			return (NULL);
+			rb_raise(rb_eException, "writing to routing socket");
 		}
 	}
 	do {
 		l = read(s, (char *)&m_rtmsg, sizeof(m_rtmsg));
 	} while (l > 0 && (rtm->rtm_seq != seq || rtm->rtm_pid != pid));
 	if (l < 0)
-		warn("read from routing socket");
+		rb_raise(rb_eException, "read from routing socket");
 	return (rtm);
 }
 
-int addifarp(int fd, char *ifname, char *host, char *eaddr)
+void
+addifarp(char *ifname, char *host, char *eaddr)
 {
 	struct sockaddr_in *addr;
 	struct sockaddr_in *dst;	/* what are we looking for */
@@ -349,16 +387,13 @@ int addifarp(int fd, char *ifname, char *host, char *eaddr)
 	sdl_m.sdl_family = AF_LINK;
 
 	dst = arp_getaddr(host);
-	if (dst == NULL)
-		return (1);
 	flags = 0;
 	ea = (struct ether_addr *)LLADDR(&sdl_m);
 	{
 		struct ether_addr *ea1 = ether_aton(eaddr);
 
 		if (ea1 == NULL) {
-			warnx("invalid Ethernet address '%s'", eaddr);
-			return (1);
+			rb_raise(rb_eException, "invalid Ethernet address '%s'", eaddr);
 		} else {
 			*ea = *ea1;
 			sdl_m.sdl_alen = ETHER_ADDR_LEN;
@@ -374,25 +409,21 @@ int addifarp(int fd, char *ifname, char *host, char *eaddr)
 	 * PPP link should be returned, on which ARP applies.
 	 */
 	rtm = arp_rtmsg(RTM_GET, dst, &sdl_m, flags);
-	if (rtm == NULL) {
-		warn("%s", host);
-		return (1);
-	}
 	addr = (struct sockaddr_in *)(rtm + 1);
 	sdl = (struct sockaddr_dl *)(SA_SIZE(addr) + (char *)addr);
 
 	if ((sdl->sdl_family != AF_LINK) ||
 	    (rtm->rtm_flags & RTF_GATEWAY) ||
 	    !arp_valid_type(sdl->sdl_type)) {
-		printf("cannot intuit interface index and type for %s\n", host);
-		return (1);
+		rb_raise(rb_eException, "cannot intuit interface index and type for %s\n", host);
 	}
 	sdl_m.sdl_type = sdl->sdl_type;
 	sdl_m.sdl_index = sdl->sdl_index;
-	return (arp_rtmsg(RTM_ADD, dst, &sdl_m, flags) == NULL);
+	arp_rtmsg(RTM_ADD, dst, &sdl_m, flags);
 }
 
-int delifarp(int fd, char *ifname, char *host)
+void
+delifarp(char *ifname, char *host)
 {
 	struct sockaddr_in *addr, *dst;
 	struct rt_msghdr *rtm;
@@ -401,8 +432,6 @@ int delifarp(int fd, char *ifname, char *host)
 	int flags = 0;
 
 	dst = arp_getaddr(host);
-	if (dst == NULL)
-		return (1);
 
 	/*
 	 * Perform a regular entry delete first.
@@ -420,10 +449,6 @@ int delifarp(int fd, char *ifname, char *host)
 
 	for (;;) {	/* try twice */
 		rtm = arp_rtmsg(RTM_GET, dst, &sdl_m, flags);
-		if (rtm == NULL) {
-			warn("%s", host);
-			return (1);
-		}
 		addr = (struct sockaddr_in *)(rtm + 1);
 		sdl = (struct sockaddr_dl *)(SA_SIZE(addr) + (char *)addr);
 
@@ -447,22 +472,17 @@ int delifarp(int fd, char *ifname, char *host)
 		 * is a proxy-arp entry to remove.
 		 */
 		if (flags & RTF_ANNOUNCE) {
-			fprintf(stderr, "delete: cannot locate %s\n",host);
-			return (1);
+			rb_raise(rb_eException, "delete: cannot locate %s\n",host);
 		}
 
 		flags |= RTF_ANNOUNCE;
 	}
 	rtm->rtm_flags |= RTF_LLDATA;
-	if (arp_rtmsg(RTM_DELETE, dst, NULL, flags) != NULL) {
-		printf("%s (%s) deleted\n", host, inet_ntoa(addr->sin_addr));
-		return (0);
-	}
-	return (1);
-
+	arp_rtmsg(RTM_DELETE, dst, NULL, flags);
 }
 
-int getifarp(int fd, char *ifname, char *host, char *saddr, size_t size)
+void 
+getifarp(char *ifname, char *host, char *saddr, size_t size)
 {
 	struct sockaddr_in *_addr;
 	u_long addr;
@@ -477,8 +497,6 @@ int getifarp(int fd, char *ifname, char *host, char *saddr, size_t size)
 	int flags;
 
 	_addr = arp_getaddr(host);
-	if (_addr == NULL)
-		return (1);
 	addr = _addr->sin_addr.s_addr;
 
 	mib[0] = CTL_NET;
@@ -492,21 +510,21 @@ int getifarp(int fd, char *ifname, char *host, char *saddr, size_t size)
 	mib[5] = 0;
 #endif	
 	if (sysctl(mib, 6, NULL, &needed, NULL, 0) < 0)
-		err(1, "route-sysctl-estimate");
+		rb_raise(rb_eException, "route-sysctl-estimate");
 	if (needed == 0)	/* empty table */
-		return 0;
+		rb_raise(rb_eException, "empty table");
 	buf = NULL;
 	for (;;) {
 		buf = reallocf(buf, needed);
 		if (buf == NULL)
-			errx(1, "could not reallocate memory");
+			rb_raise(rb_eException, "could not reallocate memory");
 		st = sysctl(mib, 6, buf, &needed, NULL, 0);
 		if (st == 0 || errno != ENOMEM)
 			break;
 		needed += needed / 8;
 	}
 	if (st == -1)
-		err(1, "actual retrieval of routing table");
+		rb_raise(rb_eException, "actual retrieval of routing table");
 	lim = buf + needed;
 	for (next = buf; next < lim; next += rtm->rtm_msglen) {
 		rtm = (struct rt_msghdr *)next;
@@ -526,18 +544,20 @@ int getifarp(int fd, char *ifname, char *host, char *saddr, size_t size)
 		}
 	}
 	free(buf);
+	if (!found_entry)
+		rb_raise(rb_eException, "entry not found");
 
-	return (found_entry ? 0 : -1);
 }
 
-int 
-setifhwaddr(int fd, char *ifname, char *addr)
+void
+setifhwaddr(char *ifname, char *addr)
 {
 	struct ifreq ifr;
 	struct sockaddr_dl sdl;
 	char mac[19];
 	char name[IFNAMSIZ];
 	int s;
+	int fd = socket_open();
 
 	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
 	memset(mac, 0, sizeof(mac));
@@ -549,22 +569,26 @@ setifhwaddr(int fd, char *ifname, char *addr)
 	bcopy(sdl.sdl_data, ifr.ifr_addr.sa_data, 6);
 	ifr.ifr_addr.sa_len = 6;
 
-	if (ioctl(fd, SIOCSIFLLADDR, &ifr) < 0)
-		return (-1);
-	return (0);
+	if (ioctl(fd, SIOCSIFLLADDR, &ifr) < 0) {
+		close(fd);
+		rb_raise(rb_eException, "%s", strerror(errno));
+	}
+	close(fd);
 }
 
-int 
-getifhwaddr(int fd, char *ifname, char *addr, size_t size)
+void
+getifhwaddr(char *ifname, char *addr, size_t size)
 {
 	struct ifaddrs *ifa_list, *ifa; 
 	struct sockaddr_dl *dl; 
 	char name[IFNAMSIZ];
 	struct ether_addr *naddr;
 	int found = 0;
+	int fd = socket_open();
 
 	if (getifaddrs(&ifa_list) < 0) {
-		return (-1);
+		close(fd);
+		rb_raise(rb_eException, "%s", strerror(errno));
 	}
 	for (ifa = ifa_list; ifa != NULL; ifa = ifa->ifa_next) { 
 		dl = (struct sockaddr_dl*)ifa->ifa_addr; 
@@ -581,7 +605,6 @@ getifhwaddr(int fd, char *ifname, char *addr, size_t size)
 	} 
 	freeifaddrs(ifa_list); 
 	if (!found)
-		return (-1);
-	return (0);
+		rb_raise(rb_eException, "interface not found");
 }
 #endif
