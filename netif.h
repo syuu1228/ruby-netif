@@ -3,8 +3,10 @@
 
 #include <sys/types.h>
 
-int setifflags(int fd, char *ifname, int value);
-int getifflags(int fd, char *ifname, int *flags);
+int setifpromisc(int fd, char *ifname, int enable);
+int getifpromisc(int fd, char *ifname, int *enable);
+int setifup(int fd, char *ifname, int enable);
+int getifup(int fd, char *ifname, int *enable);
 int setifmtu(int fd, char *ifname, int mtu);
 int getifmtu(int fd, char *ifname, int *mtu);
 int getifnetmask(int fd, char *ifname, char *mask, size_t size);

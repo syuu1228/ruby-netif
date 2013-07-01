@@ -8,8 +8,14 @@
 #include <net/if_var.h>		/* for struct ifaddr */
 #include <netinet/in_var.h>
 #include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <net/if_dl.h>
+#include <net/if_types.h>
+#include <net/ethernet.h>
+#include <ifaddrs.h>
 
-int
+static int
 setifflags(int fd, char *ifname, int value)
 {
 	struct ifreq		my_ifr;
@@ -34,7 +40,7 @@ setifflags(int fd, char *ifname, int value)
 	return (0);
 }
 
-int
+static int
 getifflags(int fd, char *ifname, int *flags)
 {
 	struct ifreq		my_ifr;
@@ -45,6 +51,38 @@ getifflags(int fd, char *ifname, int *flags)
  	if (ioctl(fd, SIOCGIFFLAGS, (caddr_t)&my_ifr) < 0)
 		return (-1);
 	*flags = (my_ifr.ifr_flags & 0xffff) | (my_ifr.ifr_flagshigh << 16);
+	return (0);
+}
+
+int setifpromisc(int fd, char *ifname, int enable)
+{
+	return setifflags(fd, ifname, 
+		enable ? IFF_PPROMISC : -IFF_PPROMISC);
+}
+
+int getifpromisc(int fd, char *ifname, int *enable)
+{
+	int flags, ret;
+
+	if ((ret = getifflags(fd, ifname, &flags)))
+		return (ret);
+	*enable = (flags & IFF_PPROMISC) ? 1 : 0;
+	return (0);
+}
+
+int setifup(int fd, char *ifname, int enable)
+{
+	return setifflags(fd, ifname, 
+		enable ? IFF_UP: -IFF_UP);
+}
+
+int getifup(int fd, char *ifname, int *enable)
+{
+	int flags, ret;
+
+	if ((ret = getifflags(fd, ifname, &flags)))
+		return (ret);
+	*enable = (flags & IFF_UP) ? 1 : 0;
 	return (0);
 }
 
@@ -170,5 +208,60 @@ int delifarp(int fd, char *ifname, char *host)
 int getifarp(int fd, char *ifname, char *host, char *addr, size_t size)
 {
 	return (-1);
+}
+
+int 
+setifhwaddr(int fd, char *ifname, char *addr)
+{
+	struct ifreq ifr;
+	struct sockaddr_dl sdl;
+	char mac[19];
+	char name[IFNAMSIZ];
+	int s;
+
+	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
+	memset(mac, 0, sizeof(mac));
+	mac[0] = ':';
+	strncpy(mac + 1, addr, strlen(addr));
+	sdl.sdl_len = sizeof(sdl);
+	link_addr(mac, &sdl);
+
+	bcopy(sdl.sdl_data, ifr.ifr_addr.sa_data, 6);
+	ifr.ifr_addr.sa_len = 6;
+
+	if (ioctl(fd, SIOCSIFLLADDR, &ifr) < 0)
+		return (-1);
+	return (0);
+}
+
+int 
+getifhwaddr(int fd, char *ifname, char *addr, size_t size)
+{
+	struct ifaddrs *ifa_list, *ifa; 
+	struct sockaddr_dl *dl; 
+	char name[IFNAMSIZ];
+	struct ether_addr *naddr;
+	int found = 0;
+
+	if (getifaddrs(&ifa_list) < 0) {
+		return (-1);
+	}
+	for (ifa = ifa_list; ifa != NULL; ifa = ifa->ifa_next) { 
+		dl = (struct sockaddr_dl*)ifa->ifa_addr; 
+		if (dl->sdl_family == AF_LINK && dl->sdl_type == IFT_ETHER) {
+			memcpy(name, dl->sdl_data, dl->sdl_nlen);
+			name[dl->sdl_nlen] = '\0';
+			if (!strcmp(name, ifname)) {
+				naddr = (struct ether_addr *)LLADDR(dl);
+				strncpy(addr, ether_ntoa(naddr), size);
+				found = 1;
+				break;
+			}
+		}
+	} 
+	freeifaddrs(ifa_list); 
+	if (!found)
+		return (-1);
+	return (0);
 }
 #endif

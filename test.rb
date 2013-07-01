@@ -1,6 +1,6 @@
 require 'netif'
 
-ifname = "eth0"
+ifname = "em0"
 begin
 	puts "eth3 exists?:#{Netif.exists?("eth3")}"
 	puts "#{ifname} exists?:#{Netif.exists?(ifname)}"
@@ -46,20 +46,20 @@ begin
 	raise "set_addr addr" unless eth.addr == "172.0.0.1"
 	raise "set_addr netmask" unless eth.netmask == "255.255.255.0"
 	raise "set_addr broadaddr" unless eth.broadaddr == "172.0.0.255"
-	eth.set_addr("192.168.122.105", "255.255.255.0")
+	eth.set_addr("192.168.75.133", "255.255.255.0")
 	puts "[set_addr]"
 	puts `ifconfig #{ifname}`
 	puts "addr:#{eth.addr}"
 	puts "netmask:#{eth.netmask}"
 	puts "broadaddr:#{eth.broadaddr}"
-	eth.add_arp("192.168.122.200", "00:11:22:33:44:55")
-	puts "[add_arp]"
-	puts `arp -a`
-	puts "arp(192.168.122.200):#{eth.get_arp("192.168.122.200")}"
-	raise "add_arp" unless eth.get_arp("192.168.122.200") == "0:11:22:33:44:55"
-	eth.del_arp("192.168.122.200")
-	puts "[del_arp]"
-	puts `arp -a`
+#	eth.add_arp("192.168.122.200", "00:11:22:33:44:55")
+#	puts "[add_arp]"
+#	puts `arp -a`
+#	puts "arp(192.168.122.200):#{eth.get_arp("192.168.122.200")}"
+#	raise "add_arp" unless eth.get_arp("192.168.122.200") == "0:11:22:33:44:55"
+#	eth.del_arp("192.168.122.200")
+#	puts "[del_arp]"
+#	puts `arp -a`
 	puts "hwaddr:#{eth.hwaddr}"
 	eth.down
 	eth.hwaddr = "00:11:22:33:44:55"
@@ -67,14 +67,14 @@ begin
 	puts "[hwaddr=00:11:22:33:44:55]"
 	puts `ifconfig #{ifname}`
 	puts "hwaddr:#{eth.hwaddr}"
-	raise "hwaddr" unless eth.hwaddr == "0:11:22:33:44:55"
+	raise "hwaddr" unless eth.hwaddr == "00:11:22:33:44:55"
 	eth.down
-	eth.hwaddr = "52:54:00:77:2b:93"
+	eth.hwaddr = "00:0c:29:17:db:87"
 	eth.up
-	puts "[hwaddr=52:54:00:77:2b:93]"
+	puts "[hwaddr=00:0c:29:17:db:87]"
 	puts `ifconfig #{ifname}`
 	puts "hwaddr:#{eth.hwaddr}"
-	raise "hwaddr" unless eth.hwaddr == "52:54:0:77:2b:93"
+	raise "hwaddr" unless eth.hwaddr == "00:0c:29:17:db:87"
 	eth.close
 
 rescue => e

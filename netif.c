@@ -37,57 +37,60 @@ VALUE netif_exists(VALUE self, VALUE ifname)
 	return INT2FIX(exist);
 }
 
-VALUE netif_setflags(VALUE self, int value)
-{
-	VALUE fd = rb_iv_get(self, "@fd");
-	VALUE ifname = rb_iv_get(self, "@ifname");
-	if ((setifflags(FIX2INT(fd), StringValuePtr(ifname), value)))
-		rb_raise(rb_eException, "%s", strerror(errno));
-	return Qnil;
-}
-
-VALUE netif_testflags(VALUE self, int value)
-{
-	int flags;
-	VALUE fd = rb_iv_get(self, "@fd");
-	VALUE ifname = rb_iv_get(self, "@ifname");
-	if ((getifflags(FIX2INT(fd), StringValuePtr(ifname), &flags)))
-		rb_raise(rb_eException, "%s", strerror(errno));
-	return INT2FIX((flags & value) ? 1 : 0);
-}
-
 VALUE netif_enable_promisc(VALUE self)
 {
-	netif_setflags(self, IFF_PROMISC);
+	VALUE fd = rb_iv_get(self, "@fd");
+	VALUE ifname = rb_iv_get(self, "@ifname");
+	if (setifpromisc(FIX2INT(fd), StringValuePtr(ifname), 1))
+		rb_raise(rb_eException, "%s", strerror(errno));
 	return Qnil;
 }
 
 VALUE netif_disable_promisc(VALUE self)
 {
-	netif_setflags(self, -IFF_PROMISC);
+	VALUE fd = rb_iv_get(self, "@fd");
+	VALUE ifname = rb_iv_get(self, "@ifname");
+	if (setifpromisc(FIX2INT(fd), StringValuePtr(ifname), 0))
+		rb_raise(rb_eException, "%s", strerror(errno));
 	return Qnil;
 }
 
 VALUE netif_test_promisc(VALUE self)
 {
-	return netif_testflags(self, IFF_PROMISC);
+	int enable;
+	VALUE fd = rb_iv_get(self, "@fd");
+	VALUE ifname = rb_iv_get(self, "@ifname");
+	if (getifpromisc(FIX2INT(fd), StringValuePtr(ifname), &enable))
+		rb_raise(rb_eException, "%s", strerror(errno));
+	return INT2FIX(enable);
 }
 
 VALUE netif_up(VALUE self)
 {
-	netif_setflags(self, IFF_UP);
+	VALUE fd = rb_iv_get(self, "@fd");
+	VALUE ifname = rb_iv_get(self, "@ifname");
+	if (setifup(FIX2INT(fd), StringValuePtr(ifname), 1))
+		rb_raise(rb_eException, "%s", strerror(errno));
 	return Qnil;
 }
 
 VALUE netif_down(VALUE self)
 {
-	netif_setflags(self, -IFF_UP);
+	VALUE fd = rb_iv_get(self, "@fd");
+	VALUE ifname = rb_iv_get(self, "@ifname");
+	if (setifup(FIX2INT(fd), StringValuePtr(ifname), 0))
+		rb_raise(rb_eException, "%s", strerror(errno));
 	return Qnil;
 }
 
 VALUE netif_test_up(VALUE self)
 {
-	return netif_testflags(self, IFF_UP);
+	int enable;
+	VALUE fd = rb_iv_get(self, "@fd");
+	VALUE ifname = rb_iv_get(self, "@ifname");
+	if (getifup(FIX2INT(fd), StringValuePtr(ifname), &enable))
+		rb_raise(rb_eException, "%s", strerror(errno));
+	return INT2FIX(enable);
 }
 
 VALUE netif_set_mtu(VALUE self, VALUE mtu)
