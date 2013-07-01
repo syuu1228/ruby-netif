@@ -14,6 +14,15 @@
 #include <net/if_types.h>
 #include <net/ethernet.h>
 #include <ifaddrs.h>
+#include <netdb.h>
+#include <err.h>
+#include <net/route.h>
+#include <unistd.h>
+#include <errno.h>
+#include <stdio.h>
+#include <netinet/if_ether.h>
+#include <sys/sysctl.h>
+#include <stdlib.h>
 
 static int
 setifflags(int fd, char *ifname, int value)
@@ -195,19 +204,330 @@ int ifexist(int fd, char *ifname)
 	return (ioctl(fd, SIOCGIFADDR, &ifr) == 0);
 }
 
-int addifarp(int fd, char *ifname, char *host, char *addr)
+/*
+ * Given a hostname, fills up a (static) struct sockaddr_in with
+ * the address of the host and returns a pointer to the
+ * structure.
+ */
+static struct sockaddr_in *
+arp_getaddr(char *host)
 {
-	return (-1);
+	struct hostent *hp;
+	static struct sockaddr_in reply;
+
+	bzero(&reply, sizeof(reply));
+	reply.sin_len = sizeof(reply);
+	reply.sin_family = AF_INET;
+	reply.sin_addr.s_addr = inet_addr(host);
+	if (reply.sin_addr.s_addr == INADDR_NONE) {
+		if (!(hp = gethostbyname(host))) {
+			warnx("%s: %s", host, hstrerror(h_errno));
+			return (NULL);
+		}
+		bcopy((char *)hp->h_addr, (char *)&reply.sin_addr,
+			sizeof reply.sin_addr);
+	}
+	return (&reply);
+}
+
+/*
+ * Returns true if the type is a valid one for ARP.
+ */
+static int
+arp_valid_type(int type)
+{
+
+	switch (type) {
+	case IFT_ETHER:
+	case IFT_FDDI:
+	case IFT_ISO88023:
+	case IFT_ISO88024:
+	case IFT_ISO88025:
+	case IFT_L2VLAN:
+	case IFT_BRIDGE:
+		return (1);
+	default:
+		return (0);
+	}
+}
+
+static struct rt_msghdr *
+arp_rtmsg(int cmd, struct sockaddr_in *dst, struct sockaddr_dl *sdl, 
+    int flags)
+{
+	static int seq;
+	int rlen;
+	int l;
+	struct sockaddr_in so_mask, *som = &so_mask;
+	static int s = -1;
+	static pid_t pid;
+
+	static struct	{
+		struct	rt_msghdr m_rtm;
+		char	m_space[512];
+	}	m_rtmsg;
+
+	struct rt_msghdr *rtm = &m_rtmsg.m_rtm;
+	char *cp = m_rtmsg.m_space;
+
+	if (s < 0) {	/* first time: open socket, get pid */
+		s = socket(PF_ROUTE, SOCK_RAW, 0);
+		if (s < 0)
+			err(1, "socket");
+		pid = getpid();
+	}
+	bzero(&so_mask, sizeof(so_mask));
+	so_mask.sin_len = 8;
+	so_mask.sin_addr.s_addr = 0xffffffff;
+
+	errno = 0;
+	/*
+	 * XXX RTM_DELETE relies on a previous RTM_GET to fill the buffer
+	 * appropriately.
+	 */
+	if (cmd == RTM_DELETE)
+		goto doit;
+	bzero((char *)&m_rtmsg, sizeof(m_rtmsg));
+	rtm->rtm_flags = flags;
+	rtm->rtm_version = RTM_VERSION;
+
+	switch (cmd) {
+	default:
+		errx(1, "internal wrong cmd");
+	case RTM_ADD:
+		rtm->rtm_addrs |= RTA_GATEWAY;
+		rtm->rtm_rmx.rmx_expire = 0;
+		rtm->rtm_inits = RTV_EXPIRE;
+		rtm->rtm_flags |= (RTF_HOST | RTF_STATIC | RTF_LLDATA);
+		/* FALLTHROUGH */
+	case RTM_GET:
+		rtm->rtm_addrs |= RTA_DST;
+	}
+#define NEXTADDR(w, s)					   \
+	do {						   \
+		if ((s) != NULL && rtm->rtm_addrs & (w)) { \
+			bcopy((s), cp, sizeof(*(s)));	   \
+			cp += SA_SIZE(s);		   \
+		}					   \
+	} while (0)
+
+	NEXTADDR(RTA_DST, dst);
+	NEXTADDR(RTA_GATEWAY, sdl);
+	NEXTADDR(RTA_NETMASK, som);
+
+	rtm->rtm_msglen = cp - (char *)&m_rtmsg;
+doit:
+	l = rtm->rtm_msglen;
+	rtm->rtm_seq = ++seq;
+	rtm->rtm_type = cmd;
+	if ((rlen = write(s, (char *)&m_rtmsg, l)) < 0) {
+		if (errno != ESRCH || cmd != RTM_DELETE) {
+			warn("writing to routing socket");
+			return (NULL);
+		}
+	}
+	do {
+		l = read(s, (char *)&m_rtmsg, sizeof(m_rtmsg));
+	} while (l > 0 && (rtm->rtm_seq != seq || rtm->rtm_pid != pid));
+	if (l < 0)
+		warn("read from routing socket");
+	return (rtm);
+}
+
+int addifarp(int fd, char *ifname, char *host, char *eaddr)
+{
+	struct sockaddr_in *addr;
+	struct sockaddr_in *dst;	/* what are we looking for */
+	struct sockaddr_dl *sdl;
+	struct rt_msghdr *rtm;
+	struct ether_addr *ea;
+	struct sockaddr_dl sdl_m;
+	int flags;
+
+	bzero(&sdl_m, sizeof(sdl_m));
+	sdl_m.sdl_len = sizeof(sdl_m);
+	sdl_m.sdl_family = AF_LINK;
+
+	dst = arp_getaddr(host);
+	if (dst == NULL)
+		return (1);
+	flags = 0;
+	ea = (struct ether_addr *)LLADDR(&sdl_m);
+	{
+		struct ether_addr *ea1 = ether_aton(eaddr);
+
+		if (ea1 == NULL) {
+			warnx("invalid Ethernet address '%s'", eaddr);
+			return (1);
+		} else {
+			*ea = *ea1;
+			sdl_m.sdl_alen = ETHER_ADDR_LEN;
+		}
+	}
+
+	/*
+	 * In the case a proxy-arp entry is being added for
+	 * a remote end point, the RTF_ANNOUNCE flag in the 
+	 * RTM_GET command is an indication to the kernel
+	 * routing code that the interface associated with
+	 * the prefix route covering the local end of the
+	 * PPP link should be returned, on which ARP applies.
+	 */
+	rtm = arp_rtmsg(RTM_GET, dst, &sdl_m, flags);
+	if (rtm == NULL) {
+		warn("%s", host);
+		return (1);
+	}
+	addr = (struct sockaddr_in *)(rtm + 1);
+	sdl = (struct sockaddr_dl *)(SA_SIZE(addr) + (char *)addr);
+
+	if ((sdl->sdl_family != AF_LINK) ||
+	    (rtm->rtm_flags & RTF_GATEWAY) ||
+	    !arp_valid_type(sdl->sdl_type)) {
+		printf("cannot intuit interface index and type for %s\n", host);
+		return (1);
+	}
+	sdl_m.sdl_type = sdl->sdl_type;
+	sdl_m.sdl_index = sdl->sdl_index;
+	return (arp_rtmsg(RTM_ADD, dst, &sdl_m, flags) == NULL);
 }
 
 int delifarp(int fd, char *ifname, char *host)
 {
-	return (-1);
+	struct sockaddr_in *addr, *dst;
+	struct rt_msghdr *rtm;
+	struct sockaddr_dl *sdl;
+	struct sockaddr_dl sdl_m;
+	int flags = 0;
+
+	dst = arp_getaddr(host);
+	if (dst == NULL)
+		return (1);
+
+	/*
+	 * Perform a regular entry delete first.
+	 */
+	flags &= ~RTF_ANNOUNCE;
+
+	/*
+	 * setup the data structure to notify the kernel
+	 * it is the ARP entry the RTM_GET is interested
+	 * in
+	 */
+	bzero(&sdl_m, sizeof(sdl_m));
+	sdl_m.sdl_len = sizeof(sdl_m);
+	sdl_m.sdl_family = AF_LINK;
+
+	for (;;) {	/* try twice */
+		rtm = arp_rtmsg(RTM_GET, dst, &sdl_m, flags);
+		if (rtm == NULL) {
+			warn("%s", host);
+			return (1);
+		}
+		addr = (struct sockaddr_in *)(rtm + 1);
+		sdl = (struct sockaddr_dl *)(SA_SIZE(addr) + (char *)addr);
+
+		/*
+		 * With the new L2/L3 restructure, the route 
+		 * returned is a prefix route. The important
+		 * piece of information from the previous
+		 * RTM_GET is the interface index. In the
+		 * case of ECMP, the kernel will traverse
+		 * the route group for the given entry.
+		 */
+		if (sdl->sdl_family == AF_LINK &&
+		    !(rtm->rtm_flags & RTF_GATEWAY) &&
+		    arp_valid_type(sdl->sdl_type) ) {
+			addr->sin_addr.s_addr = dst->sin_addr.s_addr;
+			break;
+		}
+
+		/*
+		 * Regualar entry delete failed, now check if there
+		 * is a proxy-arp entry to remove.
+		 */
+		if (flags & RTF_ANNOUNCE) {
+			fprintf(stderr, "delete: cannot locate %s\n",host);
+			return (1);
+		}
+
+		flags |= RTF_ANNOUNCE;
+	}
+	rtm->rtm_flags |= RTF_LLDATA;
+	if (arp_rtmsg(RTM_DELETE, dst, NULL, flags) != NULL) {
+		printf("%s (%s) deleted\n", host, inet_ntoa(addr->sin_addr));
+		return (0);
+	}
+	return (1);
+
 }
 
-int getifarp(int fd, char *ifname, char *host, char *addr, size_t size)
+int getifarp(int fd, char *ifname, char *host, char *saddr, size_t size)
 {
-	return (-1);
+	struct sockaddr_in *_addr;
+	u_long addr;
+	int mib[6];
+	size_t needed;
+	char *lim, *buf, *next;
+	struct rt_msghdr *rtm;
+	struct sockaddr_in *sin2;
+	struct sockaddr_dl *sdl;
+	char _ifname[IF_NAMESIZE];
+	int st, found_entry = 0;
+	int flags;
+
+	_addr = arp_getaddr(host);
+	if (_addr == NULL)
+		return (1);
+	addr = _addr->sin_addr.s_addr;
+
+	mib[0] = CTL_NET;
+	mib[1] = PF_ROUTE;
+	mib[2] = 0;
+	mib[3] = AF_INET;
+	mib[4] = NET_RT_FLAGS;
+#ifdef RTF_LLINFO
+	mib[5] = RTF_LLINFO;
+#else
+	mib[5] = 0;
+#endif	
+	if (sysctl(mib, 6, NULL, &needed, NULL, 0) < 0)
+		err(1, "route-sysctl-estimate");
+	if (needed == 0)	/* empty table */
+		return 0;
+	buf = NULL;
+	for (;;) {
+		buf = reallocf(buf, needed);
+		if (buf == NULL)
+			errx(1, "could not reallocate memory");
+		st = sysctl(mib, 6, buf, &needed, NULL, 0);
+		if (st == 0 || errno != ENOMEM)
+			break;
+		needed += needed / 8;
+	}
+	if (st == -1)
+		err(1, "actual retrieval of routing table");
+	lim = buf + needed;
+	for (next = buf; next < lim; next += rtm->rtm_msglen) {
+		rtm = (struct rt_msghdr *)next;
+		sin2 = (struct sockaddr_in *)(rtm + 1);
+		sdl = (struct sockaddr_dl *)((char *)sin2 + SA_SIZE(sin2));
+		if (if_indextoname(sdl->sdl_index, _ifname) &&
+		    strcmp(_ifname, ifname))
+			continue;
+		if (addr) {
+			if (addr != sin2->sin_addr.s_addr)
+				continue;
+			found_entry = 1;
+		}
+		if (sdl->sdl_alen) {
+			strncpy(saddr, ether_ntoa((struct ether_addr *)LLADDR(sdl)), size);
+			break;
+		}
+	}
+	free(buf);
+
+	return (found_entry ? 0 : -1);
 }
 
 int 
