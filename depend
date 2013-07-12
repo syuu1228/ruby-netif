@@ -1,1 +1,0 @@
-netif.o: netif.c netif_linux.c netif_freebsd.c netif.h
