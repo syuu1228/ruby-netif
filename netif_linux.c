@@ -6,6 +6,8 @@
 #include <sys/ioctl.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <net/if_arp.h>
+#include <netinet/ether.h>
 
 int
 setifflags(int fd, char *ifname, int value)
@@ -144,5 +146,59 @@ int ifexist(int fd, char *ifname)
 	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
 	ifr.ifr_addr.sa_family = AF_INET;
 	return (ioctl(fd, SIOCGIFADDR, &ifr) == 0);
+}
+
+int addifarpent(int fd, char *ifname, char *host, char *addr)
+{
+	struct arpreq req;
+	struct sockaddr_in *nhost = (struct sockaddr_in *)(&req.arp_pa);
+	struct ether_addr *naddr = (struct ether_addr *)(req.arp_ha.sa_data);
+
+	memset(&req, 0, sizeof(req));
+	if (!inet_aton(host, &nhost->sin_addr))
+		return (-1);
+	req.arp_pa.sa_family = AF_INET;
+	if (!ether_aton_r(addr, naddr))
+		return (-1);
+	req.arp_ha.sa_family = ARPHRD_ETHER;
+	strncpy(req.arp_dev, ifname, sizeof(req.arp_dev));
+	req.arp_flags = ATF_PERM | ATF_COM;
+	if (ioctl(fd, SIOCSARP, &req) < 0)
+		return (-1);
+	return (0);
+}
+
+int delifarpent(int fd, char *ifname, char *host)
+{
+	struct arpreq req;
+	struct sockaddr_in *nhost = (struct sockaddr_in *)(&req.arp_pa);
+
+	memset(&req, 0, sizeof(req));
+	if (!inet_aton(host, &nhost->sin_addr))
+		return (-1);
+	req.arp_pa.sa_family = AF_INET;
+	strncpy(req.arp_dev, ifname, sizeof(req.arp_dev));
+	req.arp_flags = ATF_PERM | ATF_COM;
+	if (ioctl(fd, SIOCDARP, &req) < 0)
+		return (-1);
+	return (0);
+}
+
+int getifarpent(int fd, char *ifname, char *host, char *addr, size_t size)
+{
+	struct arpreq req;
+	struct sockaddr_in *nhost = (struct sockaddr_in *)(&req.arp_pa);
+	struct ether_addr *naddr = (struct ether_addr *)(req.arp_ha.sa_data);
+
+	memset(&req, 0, sizeof(req));
+	if (!inet_aton(host, &nhost->sin_addr))
+		return (-1);
+	req.arp_pa.sa_family = AF_INET;
+	strncpy(req.arp_dev, ifname, sizeof(req.arp_dev));
+	req.arp_flags = ATF_PERM | ATF_COM;
+	if (ioctl(fd, SIOCGARP, &req) < 0)
+		return (-1);
+	strncpy(addr, ether_ntoa(naddr), size);
+	return (0);
 }
 #endif

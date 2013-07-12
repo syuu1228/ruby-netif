@@ -156,4 +156,19 @@ int ifexist(int fd, char *ifname)
 	ifr.ifr_addr.sa_family = AF_INET;
 	return (ioctl(fd, SIOCGIFADDR, &ifr) == 0);
 }
+
+int addifarpent(int fd, char *ifname, char *host, char *addr)
+{
+	return (-1);
+}
+
+int delifarpent(int fd, char *ifname, char *host)
+{
+	return (-1);
+}
+
+int getifarpent(int fd, char *ifname, char *host, char *addr, size_t size)
+{
+	return (-1);
+}
 #endif

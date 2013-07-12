@@ -12,4 +12,7 @@ int getifaddr(int fd, char *ifname, char *mask, size_t size);
 int getifbroadaddr(int fd, char *ifname, char *mask, size_t size);
 int setifaddr(int fd, char *ifname, char *addr, char *mask);
 int ifexist(int fd, char *ifname);
+int addifarpent(int fd, char *ifname, char *host, char *addr);
+int delifarpent(int fd, char *ifname, char *host);
+int getifarpent(int fd, char *ifname, char *host, char *addr, size_t size);
 #endif

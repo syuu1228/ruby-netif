@@ -1,6 +1,7 @@
 #include "netif.h"
 #include <stdio.h>
 #include <errno.h>
+#include <unistd.h>
 #include <net/if.h>
 #include <ruby.h>
 
@@ -113,7 +114,7 @@ VALUE netif_get_netmask(VALUE self)
 {
 	VALUE fd = rb_iv_get(self, "@fd");
 	VALUE ifname = rb_iv_get(self, "@ifname");
-	char buf[16];
+	char buf[128];
 
 	if ((getifnetmask(FIX2INT(fd), StringValuePtr(ifname), buf, 
 	    	sizeof(buf))))
@@ -137,7 +138,7 @@ VALUE netif_get_broadaddr(VALUE self)
 {
 	VALUE fd = rb_iv_get(self, "@fd");
 	VALUE ifname = rb_iv_get(self, "@ifname");
-	char buf[16];
+	char buf[128];
 
 	if ((getifbroadaddr(FIX2INT(fd), StringValuePtr(ifname), buf, 
 	    	sizeof(buf))))
@@ -153,6 +154,38 @@ VALUE netif_set_addr(VALUE self, VALUE addr, VALUE mask)
 		StringValuePtr(addr), StringValuePtr(mask))))
 		rb_raise(rb_eException, "%s", strerror(errno));
 	return Qnil;
+}
+
+VALUE netif_add_arp_entry(VALUE self, VALUE host, VALUE addr)
+{
+	VALUE fd = rb_iv_get(self, "@fd");
+	VALUE ifname = rb_iv_get(self, "@ifname");
+	if ((addifarpent(FIX2INT(fd), StringValuePtr(ifname), 
+		StringValuePtr(host), StringValuePtr(addr))))
+		rb_raise(rb_eException, "%s", strerror(errno));
+	return Qnil;
+}
+
+VALUE netif_del_arp_entry(VALUE self, VALUE host)
+{
+	VALUE fd = rb_iv_get(self, "@fd");
+	VALUE ifname = rb_iv_get(self, "@ifname");
+	if ((delifarpent(FIX2INT(fd), StringValuePtr(ifname), 
+		StringValuePtr(host))))
+		rb_raise(rb_eException, "%s", strerror(errno));
+	return Qnil;
+}
+
+VALUE netif_get_arp_entry(VALUE self, VALUE host)
+{
+	VALUE fd = rb_iv_get(self, "@fd");
+	VALUE ifname = rb_iv_get(self, "@ifname");
+	char buf[128];
+
+	if ((getifarpent(FIX2INT(fd), StringValuePtr(ifname), 
+		StringValuePtr(host), buf, sizeof(buf))))
+		rb_raise(rb_eException, "%s", strerror(errno));
+	return rb_str_new2(buf);
 }
 
 void Init_netif(void)
@@ -173,4 +206,7 @@ void Init_netif(void)
 	rb_define_method(rb_cNetif, "addr", netif_get_addr, 0);
 	rb_define_method(rb_cNetif, "broadaddr", netif_get_broadaddr, 0);
 	rb_define_method(rb_cNetif, "set_addr", netif_set_addr, 2);
+	rb_define_method(rb_cNetif, "add_arp_entry", netif_add_arp_entry, 2);
+	rb_define_method(rb_cNetif, "del_arp_entry", netif_del_arp_entry, 1);
+	rb_define_method(rb_cNetif, "get_arp_entry", netif_get_arp_entry, 1);
 }
