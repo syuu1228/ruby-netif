@@ -15,4 +15,6 @@ int ifexist(int fd, char *ifname);
 int addifarp(int fd, char *ifname, char *host, char *addr);
 int delifarp(int fd, char *ifname, char *host);
 int getifarp(int fd, char *ifname, char *host, char *addr, size_t size);
+int setifhwaddr(int fd, char *ifname, char *addr);
+int getifhwaddr(int fd, char *ifname, char *addr, size_t size);
 #endif

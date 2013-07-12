@@ -1,6 +1,7 @@
 #ifdef __linux__
 
 #include "netif.h"
+#include <stdio.h>
 #include <string.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
@@ -132,7 +133,7 @@ getifbroadaddr(int fd, char *ifname, char *mask, size_t size)
 
 	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
 	ifr.ifr_addr.sa_family = AF_INET;
-	if (ioctl(fd, SIOCGIFADDR, &ifr) < 0)
+	if (ioctl(fd, SIOCGIFBRDADDR, &ifr) < 0)
 		return (-1);
 	sin = (struct sockaddr_in *)&ifr.ifr_addr;
 	strncpy(mask, inet_ntoa(sin->sin_addr), size);
@@ -198,6 +199,37 @@ int getifarp(int fd, char *ifname, char *host, char *addr, size_t size)
 	req.arp_flags = ATF_PERM | ATF_COM;
 	if (ioctl(fd, SIOCGARP, &req) < 0)
 		return (-1);
+	strncpy(addr, ether_ntoa(naddr), size);
+	return (0);
+}
+
+int 
+setifhwaddr(int fd, char *ifname, char *addr)
+{
+	struct ifreq ifr;
+	struct ether_addr *naddr;
+
+	naddr = (struct ether_addr *)(ifr.ifr_hwaddr.sa_data);
+	if (!ether_aton_r(addr, naddr))
+		return (-1);
+	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
+	ifr.ifr_addr.sa_family = ARPHRD_ETHER;
+	if (ioctl(fd, SIOCSIFHWADDR, &ifr) < 0)
+		return (-1);
+	return (0);
+}
+
+int 
+getifhwaddr(int fd, char *ifname, char *addr, size_t size)
+{
+	struct ifreq ifr;
+	struct ether_addr *naddr;
+
+	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
+	ifr.ifr_addr.sa_family = AF_INET;
+	if (ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
+		return (-1);
+	naddr = (struct ether_addr *)(ifr.ifr_hwaddr.sa_data);
 	strncpy(addr, ether_ntoa(naddr), size);
 	return (0);
 }

@@ -53,7 +53,7 @@ VALUE netif_testflags(VALUE self, int value)
 	VALUE ifname = rb_iv_get(self, "@ifname");
 	if ((getifflags(FIX2INT(fd), StringValuePtr(ifname), &flags)))
 		rb_raise(rb_eException, "%s", strerror(errno));
-	return INT2FIX((flags & value));
+	return INT2FIX((flags & value) ? 1 : 0);
 }
 
 VALUE netif_enable_promisc(VALUE self)
@@ -64,7 +64,7 @@ VALUE netif_enable_promisc(VALUE self)
 
 VALUE netif_disable_promisc(VALUE self)
 {
-	netif_setflags(self, ~IFF_PROMISC);
+	netif_setflags(self, -IFF_PROMISC);
 	return Qnil;
 }
 
@@ -75,14 +75,13 @@ VALUE netif_test_promisc(VALUE self)
 
 VALUE netif_up(VALUE self)
 {
-//	netif_setflags(self, (IFF_UP | IFF_RUNNING));
 	netif_setflags(self, IFF_UP);
 	return Qnil;
 }
 
 VALUE netif_down(VALUE self)
 {
-	netif_setflags(self, ~IFF_UP);
+	netif_setflags(self, -IFF_UP);
 	return Qnil;
 }
 
@@ -188,6 +187,28 @@ VALUE netif_get_arp(VALUE self, VALUE host)
 	return rb_str_new2(buf);
 }
 
+VALUE netif_set_hwaddr(VALUE self, VALUE addr)
+{
+	VALUE fd = rb_iv_get(self, "@fd");
+	VALUE ifname = rb_iv_get(self, "@ifname");
+	if ((setifhwaddr(FIX2INT(fd), StringValuePtr(ifname), 
+		StringValuePtr(addr))))
+		rb_raise(rb_eException, "%s", strerror(errno));
+	return Qnil;
+}
+
+VALUE netif_get_hwaddr(VALUE self)
+{
+	VALUE fd = rb_iv_get(self, "@fd");
+	VALUE ifname = rb_iv_get(self, "@ifname");
+	char buf[128];
+
+	if ((getifhwaddr(FIX2INT(fd), StringValuePtr(ifname), buf, 
+	    	sizeof(buf))))
+		rb_raise(rb_eException, "%s", strerror(errno));
+	return rb_str_new2(buf);
+}
+
 void Init_netif(void)
 {
 	rb_cNetif = rb_define_class("Netif", rb_cObject);
@@ -209,4 +230,6 @@ void Init_netif(void)
 	rb_define_method(rb_cNetif, "add_arp", netif_add_arp, 2);
 	rb_define_method(rb_cNetif, "del_arp", netif_del_arp, 1);
 	rb_define_method(rb_cNetif, "get_arp", netif_get_arp, 1);
+	rb_define_method(rb_cNetif, "hwaddr=", netif_set_hwaddr, 1);
+	rb_define_method(rb_cNetif, "hwaddr", netif_get_hwaddr, 0);
 }
