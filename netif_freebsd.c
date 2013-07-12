@@ -157,17 +157,17 @@ int ifexist(int fd, char *ifname)
 	return (ioctl(fd, SIOCGIFADDR, &ifr) == 0);
 }
 
-int addifarpent(int fd, char *ifname, char *host, char *addr)
+int addifarp(int fd, char *ifname, char *host, char *addr)
 {
 	return (-1);
 }
 
-int delifarpent(int fd, char *ifname, char *host)
+int delifarp(int fd, char *ifname, char *host)
 {
 	return (-1);
 }
 
-int getifarpent(int fd, char *ifname, char *host, char *addr, size_t size)
+int getifarp(int fd, char *ifname, char *host, char *addr, size_t size)
 {
 	return (-1);
 }

@@ -43,12 +43,12 @@ begin
 	puts "addr:#{eth.addr}"
 	puts "netmask:#{eth.netmask}"
 	puts "broadaddr:#{eth.broadaddr}"
-	eth.add_arp_entry("192.168.122.200", "00:11:22:33:44:55")
-	puts "[add_arp_entry]"
+	eth.add_arp("192.168.122.200", "00:11:22:33:44:55")
+	puts "[add_arp]"
 	puts `arp -a`
-	puts "arp_entry(192.168.122.200):#{eth.get_arp_entry("192.168.122.200")}"
-	eth.del_arp_entry("192.168.122.200")
-	puts "[del_arp_entry]"
+	puts "arp(192.168.122.200):#{eth.get_arp("192.168.122.200")}"
+	eth.del_arp("192.168.122.200")
+	puts "[del_arp]"
 	puts `arp -a`
 	eth.close
 
