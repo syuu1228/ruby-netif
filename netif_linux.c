@@ -5,8 +5,6 @@
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <netinet/in.h>
-#include <net/if_var.h>		/* for struct ifaddr */
-#include <netinet/in_var.h>
 #include <arpa/inet.h>
 
 int
@@ -16,7 +14,7 @@ setifflags(int fd, char *ifname, int value)
 	int flags;
 
 	memset(&my_ifr, 0, sizeof(my_ifr));
-	(void) strlcpy(my_ifr.ifr_name, ifname, sizeof(my_ifr.ifr_name));
+	(void) strncpy(my_ifr.ifr_name, ifname, sizeof(my_ifr.ifr_name));
 
  	if (ioctl(fd, SIOCGIFFLAGS, (caddr_t)&my_ifr) < 0)
 		return (-1);
@@ -39,7 +37,7 @@ getifflags(int fd, char *ifname, int *flags)
 	struct ifreq		my_ifr;
 
 	memset(&my_ifr, 0, sizeof(my_ifr));
-	(void) strlcpy(my_ifr.ifr_name, ifname, sizeof(my_ifr.ifr_name));
+	(void) strncpy(my_ifr.ifr_name, ifname, sizeof(my_ifr.ifr_name));
 
  	if (ioctl(fd, SIOCGIFFLAGS, (caddr_t)&my_ifr) < 0)
 		return (-1);
@@ -72,22 +70,6 @@ getifmtu(int fd, char *ifname, int *mtu)
 }
 
 int
-setifnetmask(int fd, char *ifname, char *addr)
-{
-	struct ifreq ifr;
-	struct sockaddr_in *sin = (struct sockaddr_in *)(&ifr.ifr_addr);
-
-	sin->sin_family = AF_INET;
-	if (inet_aton(addr, &sin->sin_addr))
-		return (-1):
-
-	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
-	if (ioctl(fd, SIOCSIFNETMASK, &ifr) < 0)
-		return (-1);
-	return (0);
-}
-
-int
 getifnetmask(int fd, char *ifname, char *mask, size_t size)
 {
 	struct ifreq ifr;
@@ -103,18 +85,25 @@ getifnetmask(int fd, char *ifname, char *mask, size_t size)
 }
 
 int
-setifaddr(int fd, char *ifname, char *addr)
+setifaddr(int fd, char *ifname, char *addr, char *mask)
 {
 	struct ifreq ifr;
 	struct sockaddr_in *sin = (struct sockaddr_in *)(&ifr.ifr_addr);
 
 	sin->sin_family = AF_INET;
-	if (inet_aton(addr, &sin->sin_addr))
-		return (-1):
+	if (!inet_aton(addr, &sin->sin_addr))
+		return (-1);
 
 	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
 	if (ioctl(fd, SIOCSIFADDR, &ifr) < 0)
 		return (-1);
+
+	if (!inet_aton(mask, &sin->sin_addr))
+		return (-1);
+
+	if (ioctl(fd, SIOCSIFNETMASK, &ifr) < 0)
+		return (-1);
+
 	return (0);
 }
 
@@ -133,22 +122,6 @@ getifaddr(int fd, char *ifname, char *mask, size_t size)
 	return (0);
 }
 
-int
-setifbroadaddr(int fd, char *ifname, char *addr)
-{
-	struct ifreq ifr;
-	struct sockaddr_in *sin = (struct sockaddr_in *)(&ifr.ifr_addr);
-
-	sin->sin_family = AF_INET;
-	if (inet_aton(addr, &sin->sin_addr))
-		return (-1):
-
-	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
-	if (ioctl(fd, SIOCSIFBRDADDR, &ifr) < 0)
-		return (-1);
-	return (0);
-}
-
 int 
 getifbroadaddr(int fd, char *ifname, char *mask, size_t size)
 {
@@ -162,5 +135,14 @@ getifbroadaddr(int fd, char *ifname, char *mask, size_t size)
 	sin = (struct sockaddr_in *)&ifr.ifr_addr;
 	strncpy(mask, inet_ntoa(sin->sin_addr), size);
 	return (0);
+}
+
+int ifexist(int fd, char *ifname)
+{
+	struct ifreq ifr;
+
+	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
+	ifr.ifr_addr.sa_family = AF_INET;
+	return (ioctl(fd, SIOCGIFADDR, &ifr) == 0);
 }
 #endif

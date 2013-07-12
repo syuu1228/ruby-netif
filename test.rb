@@ -1,8 +1,8 @@
 require 'netif'
 
-ifname = "em0"
+ifname = "eth0"
 begin
-	puts "eth2 exists?:#{Netif.exists?("eth2")}"
+	puts "eth3 exists?:#{Netif.exists?("eth3")}"
 	puts "#{ifname} exists?:#{Netif.exists?(ifname)}"
 	eth = Netif.new(ifname)
 	p eth
@@ -37,7 +37,7 @@ begin
 	puts "addr:#{eth.addr}"
 	puts "netmask:#{eth.netmask}"
 	puts "broadaddr:#{eth.broadaddr}"
-	eth.set_addr("192.168.75.133", "255.255.255.0")
+	eth.set_addr("192.168.122.105", "255.255.255.0")
 	puts "[set_addr]"
 	puts `ifconfig #{ifname}`
 	puts "addr:#{eth.addr}"
