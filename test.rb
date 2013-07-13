@@ -75,7 +75,6 @@ begin
 	puts `ifconfig #{ifname}`
 	puts "hwaddr:#{eth.hwaddr}"
 	raise "hwaddr" unless eth.hwaddr == "00:0c:29:17:db:87"
-	eth.close
 
 rescue => e
 	p $!
