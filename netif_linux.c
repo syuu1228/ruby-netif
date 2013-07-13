@@ -10,7 +10,19 @@
 #include <net/if_arp.h>
 #include <netinet/ether.h>
 
-int
+char * __ether_ntoa(struct ether_addr *addr, char *buf, size_t size)
+{
+	snprintf(buf, size, "%02x:%02x:%02x:%02x:%02x:%02x",
+		addr->ether_addr_octet[0],
+		addr->ether_addr_octet[1],
+		addr->ether_addr_octet[2],
+		addr->ether_addr_octet[3],
+		addr->ether_addr_octet[4],
+		addr->ether_addr_octet[5]);
+	return buf;
+}
+
+static int
 setifflags(int fd, char *ifname, int value)
 {
 	struct ifreq		my_ifr;
@@ -34,7 +46,7 @@ setifflags(int fd, char *ifname, int value)
 	return (0);
 }
 
-int
+static int
 getifflags(int fd, char *ifname, int *flags)
 {
 	struct ifreq		my_ifr;
@@ -45,6 +57,38 @@ getifflags(int fd, char *ifname, int *flags)
  	if (ioctl(fd, SIOCGIFFLAGS, (caddr_t)&my_ifr) < 0)
 		return (-1);
 	*flags = my_ifr.ifr_flags;
+	return (0);
+}
+
+int setifpromisc(int fd, char *ifname, int enable)
+{
+	return setifflags(fd, ifname, 
+		enable ? IFF_PROMISC : -IFF_PROMISC);
+}
+
+int getifpromisc(int fd, char *ifname, int *enable)
+{
+	int flags, ret;
+
+	if ((ret = getifflags(fd, ifname, &flags)))
+		return (ret);
+	*enable = (flags & IFF_PROMISC) ? 1 : 0;
+	return (0);
+}
+
+int setifup(int fd, char *ifname, int enable)
+{
+	return setifflags(fd, ifname, 
+		enable ? IFF_UP : -IFF_UP);
+}
+
+int getifup(int fd, char *ifname, int *enable)
+{
+	int flags, ret;
+
+	if ((ret = getifflags(fd, ifname, &flags)))
+		return (ret);
+	*enable = (flags & IFF_UP) ? 1 : 0;
 	return (0);
 }
 
@@ -199,7 +243,7 @@ int getifarp(int fd, char *ifname, char *host, char *addr, size_t size)
 	req.arp_flags = ATF_PERM | ATF_COM;
 	if (ioctl(fd, SIOCGARP, &req) < 0)
 		return (-1);
-	strncpy(addr, ether_ntoa(naddr), size);
+	__ether_ntoa(naddr, addr, size);
 	return (0);
 }
 
@@ -230,7 +274,7 @@ getifhwaddr(int fd, char *ifname, char *addr, size_t size)
 	if (ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
 		return (-1);
 	naddr = (struct ether_addr *)(ifr.ifr_hwaddr.sa_data);
-	strncpy(addr, ether_ntoa(naddr), size);
+	__ether_ntoa(naddr, addr, size);
 	return (0);
 }
 #endif
