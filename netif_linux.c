@@ -80,23 +80,27 @@ getifflags(char *ifname)
 	return (ifr.ifr_flags);
 }
 
-void setifpromisc(char *ifname, int enable)
+void 
+setifpromisc(char *ifname, int enable)
 {
 	setifflags(ifname, enable ? IFF_PROMISC : -IFF_PROMISC);
 }
 
-int getifpromisc(char *ifname)
+int 
+getifpromisc(char *ifname)
 {
 	int flags = getifflags(ifname);
 	return ((flags & IFF_PROMISC) ? 1 : 0);
 }
 
-void setifup(char *ifname, int enable)
+void 
+setifup(char *ifname, int enable)
 {
 	setifflags(ifname, enable ? IFF_UP : -IFF_UP);
 }
 
-int getifup(char *ifname)
+int 
+getifup(char *ifname)
 {
 	int flags = getifflags(ifname);
 	return ((flags & IFF_UP) ? 1 : 0);
@@ -217,7 +221,8 @@ getifbroadaddr(char *ifname, char *mask, size_t size)
 	close(fd);
 }
 
-int ifexist(char *ifname)
+int 
+ifexist(char *ifname)
 {
 	struct ifreq ifr;
 	int fd = socket_open();
@@ -230,7 +235,8 @@ int ifexist(char *ifname)
 	return (ret == 0 ? 1 : 0);
 }
 
-void addifarp(char *ifname, char *host, char *addr)
+void 
+addifarp(char *ifname, char *host, char *addr)
 {
 	struct arpreq req;
 	struct sockaddr_in *nhost = (struct sockaddr_in *)(&req.arp_pa);
@@ -257,7 +263,8 @@ void addifarp(char *ifname, char *host, char *addr)
 	close(fd);
 }
 
-void delifarp(char *ifname, char *host)
+void 
+delifarp(char *ifname, char *host)
 {
 	struct arpreq req;
 	struct sockaddr_in *nhost = (struct sockaddr_in *)(&req.arp_pa);
@@ -278,7 +285,8 @@ void delifarp(char *ifname, char *host)
 	close(fd);
 }
 
-void getifarp(char *ifname, char *host, char *addr, size_t size)
+void 
+getifarp(char *ifname, char *host, char *addr, size_t size)
 {
 	struct arpreq req;
 	struct sockaddr_in *nhost = (struct sockaddr_in *)(&req.arp_pa);
