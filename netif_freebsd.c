@@ -607,4 +607,19 @@ getifhwaddr(char *ifname, char *addr, size_t size)
 	if (!found)
 		rb_raise(rb_eException, "interface not found");
 }
+
+void setifdefaultgw(char *ifname, char *addr)
+{
+	rb_raise(rb_eException, "not implemented");
+}
+
+void delifdefaultgw(char *ifname, char *addr)
+{
+	rb_raise(rb_eException, "not implemented");
+}
+
+int getifdefaultgw(char *ifname, char *addr, size_t size)
+{
+	rb_raise(rb_eException, "not implemented");
+}
 #endif

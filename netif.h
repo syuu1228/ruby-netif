@@ -19,4 +19,7 @@ void delifarp(char *ifname, char *host);
 void getifarp(char *ifname, char *host, char *addr, size_t size);
 void setifhwaddr(char *ifname, char *addr);
 void getifhwaddr(char *ifname, char *addr, size_t size);
+void setifdefaultgw(char *ifname, char *addr);
+void delifdefaultgw(char *ifname, char *addr);
+int getifdefaultgw(char *ifname, char *addr, size_t size);
 #endif

@@ -8,8 +8,10 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <net/if_arp.h>
+#include <net/route.h>
 #include <netinet/ether.h>
 #include <errno.h>
+#include <unistd.h>
 #include <ruby.h>
 
 static int 
@@ -346,5 +348,96 @@ getifhwaddr(char *ifname, char *addr, size_t size)
 	naddr = (struct ether_addr *)(ifr.ifr_hwaddr.sa_data);
 	__ether_ntoa(naddr, addr, size);
 	close(fd);
+}
+
+void setifdefaultgw(char *ifname, char *addr)
+{
+	struct rtentry rt;
+	struct sockaddr_in *sin;
+	int fd = socket_open();
+
+	memset(&rt, 0, sizeof(rt));
+	rt.rt_dev = ifname;
+	rt.rt_metric = 0;
+	rt.rt_flags = RTF_UP | RTF_GATEWAY;
+
+	sin = (struct sockaddr_in *)&rt.rt_gateway;
+	sin->sin_family = AF_INET;
+	sin->sin_port = 0;
+	inet_aton(addr, &sin->sin_addr);
+
+	sin = (struct sockaddr_in *)&rt.rt_dst;
+	sin->sin_family = AF_INET;
+	sin->sin_port = 0;
+	sin->sin_addr.s_addr = INADDR_ANY;
+
+	sin = (struct sockaddr_in *)&rt.rt_genmask;
+	sin->sin_family = AF_INET;
+	sin->sin_port = 0;
+	sin->sin_addr.s_addr = INADDR_ANY;
+
+	if (ioctl(fd, SIOCADDRT, &rt)) {
+		close(fd);
+		rb_raise(rb_eException, "%s", strerror(errno));
+	}
+
+	close(fd);
+}
+
+void delifdefaultgw(char *ifname, char *addr)
+{
+	struct rtentry rt;
+	struct sockaddr_in *sin;
+	int fd = socket_open();
+
+	memset(&rt, 0, sizeof(rt));
+	rt.rt_dev = ifname;
+	rt.rt_metric = 0;
+	rt.rt_flags = RTF_UP | RTF_GATEWAY;
+
+	sin = (struct sockaddr_in *)&rt.rt_gateway;
+	sin->sin_family = AF_INET;
+	sin->sin_port = 0;
+	inet_aton(addr, &sin->sin_addr);
+
+	sin = (struct sockaddr_in *)&rt.rt_dst;
+	sin->sin_family = AF_INET;
+	sin->sin_port = 0;
+	sin->sin_addr.s_addr = INADDR_ANY;
+
+	sin = (struct sockaddr_in *)&rt.rt_genmask;
+	sin->sin_family = AF_INET;
+	sin->sin_port = 0;
+	sin->sin_addr.s_addr = INADDR_ANY;
+
+	if (ioctl(fd, SIOCDELRT, &rt)) {
+		close(fd);
+		rb_raise(rb_eException, "%s", strerror(errno));
+	}
+
+	close(fd);
+}
+
+int getifdefaultgw(char *ifname, char *addr, size_t size)
+{
+	FILE *route;
+	char line[1024];
+
+	if (!(route = fopen("/proc/net/route", "r")))
+		rb_raise(rb_eException, "%s", strerror(errno));
+	while (fgets(line, sizeof(line), route)) {
+		char *l_ifname = strtok(line, " \t");
+		char *l_dest = strtok(NULL, " \t");
+		char *l_gateway = strtok(NULL, " \t");
+		if (!strcmp(ifname, l_ifname) && !strcmp(l_dest, "00000000")) {
+			struct in_addr gateway = 
+				{ strtol(l_gateway, NULL, 16) };
+			strncpy(addr, inet_ntoa(gateway), size);
+			fclose(route);
+			return (0);
+		}
+	}
+	fclose(route);
+	return (-1);
 }
 #endif

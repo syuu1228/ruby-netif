@@ -150,6 +150,29 @@ VALUE netif_get_hwaddr(VALUE self)
 	return rb_str_new2(buf);
 }
 
+VALUE netif_set_defaultgw(VALUE self, VALUE addr)
+{
+	VALUE ifname = rb_iv_get(self, "@ifname");
+	char buf[128];
+
+	if (!getifdefaultgw(StringValuePtr(ifname), buf, sizeof(buf)))
+		delifdefaultgw(StringValuePtr(ifname), buf);
+	if (addr != Qnil)
+		setifdefaultgw(StringValuePtr(ifname), StringValuePtr(addr));
+	return Qnil;
+}
+
+VALUE netif_get_defaultgw(VALUE self)
+{
+	VALUE ifname = rb_iv_get(self, "@ifname");
+	char buf[128];
+
+	if (!getifdefaultgw(StringValuePtr(ifname), buf, sizeof(buf)))
+		return rb_str_new2(buf);
+	else
+		return Qnil;
+}
+
 void Init_netif(void)
 {
 	rb_cNetif = rb_define_class("Netif", rb_cObject);
@@ -172,4 +195,6 @@ void Init_netif(void)
 	rb_define_method(rb_cNetif, "get_arp", netif_get_arp, 1);
 	rb_define_method(rb_cNetif, "hwaddr=", netif_set_hwaddr, 1);
 	rb_define_method(rb_cNetif, "hwaddr", netif_get_hwaddr, 0);
+	rb_define_method(rb_cNetif, "defaultgw=", netif_set_defaultgw, 1);
+	rb_define_method(rb_cNetif, "defaultgw", netif_get_defaultgw, 0);
 }
