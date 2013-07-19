@@ -1,1 +1,4 @@
-$(DLLIB): $(SRCS)
+netif.o \
+netif_freebsd.o \
+netif_linux.o \
+	: netif.h
