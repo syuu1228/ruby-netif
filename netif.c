@@ -15,7 +15,7 @@ VALUE netif_initialize(VALUE self, VALUE ifname)
 VALUE netif_exists(VALUE self, VALUE ifname)
 {
 	int exist = ifexist(StringValuePtr(ifname));
-	return INT2FIX(exist);
+	return exist ? Qtrue : Qfalse;
 }
 
 VALUE netif_enable_promisc(VALUE self)
@@ -36,7 +36,7 @@ VALUE netif_test_promisc(VALUE self)
 {
 	VALUE ifname = rb_iv_get(self, "@ifname");
 	int enable = getifpromisc(StringValuePtr(ifname));
-	return INT2FIX(enable);
+	return enable ? Qtrue : Qfalse;
 }
 
 VALUE netif_up(VALUE self)
@@ -57,7 +57,7 @@ VALUE netif_test_up(VALUE self)
 {
 	VALUE ifname = rb_iv_get(self, "@ifname");
 	int enable = getifup(StringValuePtr(ifname));
-	return INT2FIX(enable);
+	return enable ? Qtrue : Qfalse;
 }
 
 VALUE netif_set_mtu(VALUE self, VALUE mtu)
