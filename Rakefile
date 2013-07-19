@@ -19,17 +19,9 @@ EXT_NAME = GEM_SPEC.name.gsub(/-/, '_')
 
 ## ======================================================================
 
-require 'rake/clean'
-
-CLEAN.include('pkg', 'tmp', "lib/#{EXT_NAME}.so")
-
-## ======================================================================
-
 require 'rake/extensiontask'
 
-Rake::ExtensionTask.new(EXT_NAME, GEM_SPEC) do |task|
-  task.source_pattern = '*.{c,h}'
-end
+Rake::ExtensionTask.new(EXT_NAME, GEM_SPEC)
 
 ## ======================================================================
 
@@ -39,7 +31,12 @@ Rake::TestTask.new
 
 ## ======================================================================
 
-task :default => [:compile]
+require 'rake/clean'
 
-task :test => "lib/#{EXT_NAME}.so"
+CLEAN.include('pkg')
+
+## ======================================================================
+
+task :default => [:compile]
+task :test => [:compile]
 
