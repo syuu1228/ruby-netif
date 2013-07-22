@@ -1,3 +1,3 @@
 require "mkmf"
 
-create_makefile("netif")
+create_makefile("netif/netif")
