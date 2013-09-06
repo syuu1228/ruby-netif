@@ -232,7 +232,7 @@ ifexist(char *ifname)
 
 	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
 	ifr.ifr_addr.sa_family = AF_INET;
-	ret = ioctl(fd, SIOCGIFADDR, &ifr);
+	ret = ioctl(fd, SIOCGIFHWADDR, &ifr);
 	close(fd);
 	return (ret == 0 ? 1 : 0);
 }
